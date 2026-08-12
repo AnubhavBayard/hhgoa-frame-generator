@@ -5,3 +5,6 @@ node_modules
 
 # 14M of source photos — tools/cut-*.py turned these into public/*.png
 user_inputs
+
+# vercel link wrote this; narrowed so .env.example stays tracked
+.env
