@@ -3,16 +3,32 @@
 Shortlisting task 1. Upload a photo, get a branded HH Goa 2026 graphic, download it
 or post it to X. No login, no signup gate, one pass start to finish.
 
-Both formats from the brief are built:
+Live: **https://hhgoa-frame-generator-sepia.vercel.app**
 
-- **Format A — PFP frame**: 1000×1000. Photo stays full-bleed, the ornament ring
-  and ribbon wrap it. Drop it straight in as an X profile picture.
-- **Format B — Builder ID card**: 1080×1440 (3:4), a redraw of the printed HH
-  Goa key-art poster. Torn yellow border, tapa-cloth green field, the palm and
-  `GOA, INDIA` header, the wavy photo window, `28 – 31 OCT 2026`, and the
-  `HACKER गोवा HOUSE` wordmark inside its cowrie-and-star-anise wreath. Your
-  name, stack and generated builder class sit between the dates and the wreath —
-  the only block the poster itself does not have.
+## What it makes
+
+Both outputs below are real exports from the app, at the exact pixel sizes it
+writes. The app hands you PNG; these are stored as JPEG to keep the repo light.
+
+| Format A — PFP frame | Format B — Builder ID card |
+|---|---|
+| <img src="docs/sample-pfp.jpg" alt="Round HH Goa PFP frame around a photo" width="330"> | <img src="docs/sample-builder-id.jpg" alt="HH Goa 2026 builder ID card" width="330"> |
+| **1000×1000**, square. Sized for an X / Discord / GitHub avatar — drop it in as-is. | **1080×1425**, portrait. The printed HH Goa key-art poster with your photo in its window. |
+
+- **Format A — PFP frame**: 1000×1000. The photo fills a circular well, the
+  scalloped yellow ring and tapa-cloth field wrap it, and the `HACKER गोवा
+  HOUSE` sticker sits bottom-left. Crops round, so it survives every platform
+  that masks avatars into a circle.
+- **Format B — Builder ID card**: 1080×1425. Torn yellow border, tapa-cloth
+  green field, the palm and `GOA, INDIA` header, the wavy photo window,
+  `28 – 31 OCT 2026`, and the `HACKER गोवा HOUSE` wordmark inside its
+  cowrie-and-star-anise wreath. Your name, stack and generated builder class sit
+  between the dates and the wreath — the only block the poster itself does not
+  have. The sample shows the untouched empty state, so it reads `YOUR NAME` and
+  the placeholder class `SHIPS AT 3AM`; typing a name and stack replaces both.
+
+Both are drawn on a client canvas at full export resolution — what the preview
+shows is the file you get, not a scaled proxy.
 
 ## Run it
 
@@ -24,9 +40,13 @@ npm test         # crop maths, title generator, generated art
 
 ## Deploy
 
+Already deployed at
+[hhgoa-frame-generator-sepia.vercel.app](https://hhgoa-frame-generator-sepia.vercel.app),
+with this repo connected — a push to `main` ships production. From scratch:
+
 ```bash
-npx vercel        # link the project
-npx vercel deploy --prod
+npx vercel link   # link the project
+npx vercel --prod
 ```
 
 Then add a **Blob** store in the Vercel dashboard (Storage → Create → Blob) and
@@ -46,7 +66,7 @@ Task #1 — HH Goa Frame / ID Card Generator.
 | Downloadable output | `canvas.toBlob` → real PNG file on disk. |
 | Share to X, pre-filled | `POST /api/share` stores the PNG in Vercel Blob and returns an id. The button opens `x.com/intent/post` with the caption and a link to `/f/<id>`. |
 | Link preview shows the graphic | `app/f/[id]/page.js` sets `og:image` / `twitter:image` to the stored PNG, `summary_large_image`. |
-| Share works even if the store is down | The API answers `501`, the client downloads the PNG and opens the composer with the caption, telling the user to attach it. Mobile also gets the native share sheet with the file attached. |
+| Share works even if the store is down | `shareToX` in `app/page.js` tries the native share sheet first (phones get the PNG attached to the post). Failing that, an upload error — or a localhost / LAN origin X could never crawl — drops the link and the composer opens with the caption plus a note to attach the PNG by hand. The post still happens; only the preview card is lost. |
 | `#FrameInGoa` | In the caption constant in `app/page.js`. |
 | Mobile-friendly | Single-column, 16px inputs (no iOS zoom), tap-anywhere dropzone, `accept="image/*"` opens the camera roll. |
 | Instantly recognisable branding | Format B is the key-art poster itself, redrawn as vectors: same palette, same border, same wordmark-in-a-wreath lockup. |
@@ -55,19 +75,21 @@ Task #1 — HH Goa Frame / ID Card Generator.
 ## Layout
 
 ```
-lib/brand.js    palette, fonts, event copy  (mirrors ../brand/BRAND.md)
-lib/art.js      generated SVG: the poster (border, tapa field, palm, wreath,
-                photo window) and the Format A beach scene
-lib/render.js   canvas pipeline for both formats + file decoding
-preview.html    dev-only: renders a card straight to a canvas, no Next needed
-                (`python3 -m http.server 8931`, then /preview.html?photo=1)
-app/page.js     the whole UI
-app/api/share/  PNG → Vercel Blob
-app/f/[id]/     share landing page whose OG image is the generated graphic
+lib/brand.js     palette, fonts, event copy
+lib/render.js    canvas pipeline for both formats, file decoding, crop maths
+public/          the two frame plates (pfp-frame.png, card-frame.png) the
+                 canvas composites the photo behind, plus landing art
+tools/cut-*.py   one-off scripts that cut those plates out of the key-art
+app/Landing.js   the sun-burst landing overlay (CSS animation, no JS library)
+app/page.js      the whole tool UI — tabs, dropzone, crop dialog, share
+app/api/share/   PNG → Vercel Blob (tmp-dir fallback when no token)
+app/f/[id]/      share landing page whose OG image is the generated graphic
+docs/            the two sample exports shown above
 ```
 
-Art is generated SVG rather than image assets, so every ornament scales to any
-canvas size and the whole app ships in ~5 kB of page JS.
+Everything renders in the browser: `1000×1000` and `1080×1425` canvases,
+composited against pre-cut frame plates so no ornament has to be redrawn per
+keystroke. Production build is 7.3 kB for the page, 110 kB first load JS.
 
 ## Not built yet
 
@@ -79,5 +101,8 @@ layout is not.
 
 - Blobs are never garbage-collected — fine for a hackathon, add a TTL sweep if
   this outlives the event.
-- Format A is still the mint beach card, not the poster. The two formats no
-  longer look like one system.
+- Without `BLOB_READ_WRITE_TOKEN` the PNG is parked in the serverless tmp dir,
+  which the next instance does not share: the share link 404s for everyone else.
+  Downloads are unaffected. Set the token before sharing links in anger.
+- `POST /api/share` with a malformed body answers `500`, not `400` —
+  `request.formData()` throws before the guard runs.
