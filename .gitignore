@@ -1,0 +1,7 @@
+node_modules
+.next
+.env*.local
+.vercel
+
+# 14M of source photos — tools/cut-*.py turned these into public/*.png
+user_inputs

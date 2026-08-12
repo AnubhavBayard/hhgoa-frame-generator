@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- Dev harness, not part of the app: renders the ID card to a canvas with no
+     Next build in the way, so a layout tweak can be eyeballed (or screenshotted
+     headlessly) in one second. Serve the project root and open /preview.html.
+     Query: ?photo=1 for a stand-in portrait, &name=, &role= -->
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@900&family=Space+Grotesk:wght@400;500;700&family=Yatra+One&display=swap" rel="stylesheet">
+<body style="margin:0;background:#222">
+<canvas id="c" style="width:540px;display:block;margin:0 auto"></canvas>
+<script type="module">
+  import { renderCard } from './lib/render.js';
+  import { loadFonts } from './lib/brand.js';
+  const params = new URLSearchParams(location.search);
+  await loadFonts().catch(() => {});
+  let photo = null;
+  if (params.get('photo')) {
+    const o = new OffscreenCanvas(900, 1200);
+    const g = o.getContext('2d');
+    const sky = g.createLinearGradient(0, 0, 0, 1200);
+    sky.addColorStop(0, '#7fb2e5');
+    sky.addColorStop(1, '#f2d9a8');
+    g.fillStyle = sky;
+    g.fillRect(0, 0, 900, 1200);
+    g.fillStyle = '#3a2a1a';
+    g.beginPath();
+    g.arc(450, 430, 190, 0, 7);
+    g.fill();
+    g.fillStyle = '#c98a5a';
+    g.beginPath();
+    g.arc(450, 400, 150, 0, 7);
+    g.fill();
+    g.fillStyle = '#1c2b3a';
+    g.fillRect(220, 620, 460, 580);
+    photo = o.transferToImageBitmap();
+  }
+  await renderCard(document.getElementById('c'), photo, {
+    name: params.get('name') || 'Utsav',
+    role: params.get('role') || 'Full-stack · Solidity',
+  });
+  document.title = 'ready';
+</script>
