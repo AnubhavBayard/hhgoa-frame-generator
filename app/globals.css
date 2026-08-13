@@ -444,13 +444,8 @@ footer { margin-top: 34px; text-align: center; font-size: 11px; letter-spacing: 
   letter-spacing: 0.22em;
 }
 
-/* zig-zag ticket edge around the CTA */
-.ticket {
-  display: block;
-  padding: 5px;
-  background:
-    repeating-linear-gradient(45deg, var(--pink) 0 5px, var(--yellow) 5px 10px);
-}
+/* bare wrapper: the button's own outline and shadow are the whole frame now */
+.ticket { display: block; }
 
 .ticket button {
   font: inherit;
