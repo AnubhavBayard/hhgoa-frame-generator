@@ -135,7 +135,9 @@ function Tool() {
     setBusy('');
   }
 
-  async function shareToX(text) {
+  // Not async on purpose: an await anywhere in here spends the click, and the
+  // window that opens X is blocked the moment that happens.
+  function shareToX(text) {
     setError('');
     setNote('');
     setBusy('Opening X…');
@@ -144,39 +146,41 @@ function Tool() {
     // param, which X would paste into the post body as a link after the
     // hashtag. The graphic is attached by hand — nothing a web page can hand
     // X carries media, so the choice is a visible link or a manual attach.
-    // Opened first, while the click still counts as a user gesture; `noopener`
-    // in the features string would hand back null, so the opener is cut
-    // manually.
-    let tab = window.open('', '_blank');
-    if (tab) tab.opener = null;
-
-    // Clipboard first so the attach is a paste where that works — the X web
-    // composer takes pasted images. Downloading and picking the file is the
-    // fallback for browsers that will not write image/png.
-    let pasteable = false;
-    try {
-      // ClipboardItem takes the promise unresolved: Safari rejects a write
-      // whose data was awaited first. The encoded PNG is normally already in
-      // hand, so this only re-encodes if a click beat the draw effect to it.
-      await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': png ?? toBlob(canvasRef.current) }),
-      ]);
-      pasteable = true;
-    } catch {
-      /* no permission, no ClipboardItem, or no image/png support */
-    }
-    setNote(
-      pasteable
-        ? `Image copied — ${PASTE_HINT} to attach it.`
-        : 'Use DOWNLOAD PNG and attach it to the post.',
-    );
     const url = new URL('https://x.com/intent/post');
     url.searchParams.set('text', text);
-    // The blank tab is already open; navigating it is never blocked. If the
-    // browser refused it up front, take this tab instead of losing the post.
-    if (tab) tab.location.href = url.toString();
-    else window.location.href = url.toString();
+
+    // Started here, inside the click, because a clipboard write is refused
+    // once the document loses focus — and deliberately not awaited. Awaiting
+    // it was what broke opening X: a write that never settles left the window
+    // sitting on about:blank with nothing to navigate it.
+    let copied;
+    try {
+      copied = navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': png ?? toBlob(canvasRef.current) }),
+      ]);
+    } catch {
+      /* no clipboard API, or no ClipboardItem to construct */
+    }
+
+    // Nothing has been awaited, so the click still counts and this is not
+    // blocked. A blocked window returns null either way — then the post is
+    // worth more than staying put, so this tab goes.
+    if (!window.open(url, '_blank', 'noopener,noreferrer')) {
+      window.location.href = url.toString();
+    }
     setBusy('');
+
+    // The composer takes a pasted image where the clipboard cooperates;
+    // downloading and picking the file is the fallback everywhere else. An
+    // undefined `copied` means the write never started, which is a failure —
+    // Promise.resolve would call it a success.
+    const attach = 'Use DOWNLOAD PNG and attach it to the post.';
+    if (!copied) setNote(attach);
+    else {
+      copied
+        .then(() => setNote(`Image copied — ${PASTE_HINT} to attach it.`))
+        .catch(() => setNote(attach));
+    }
   }
 
   // Same activation rule as shareToX: reach navigator.share with the PNG the
