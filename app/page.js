@@ -29,12 +29,13 @@ const ZOOM_MIN = 1;
 const ZOOM_MAX = 8;
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
-// Only ever read inside a click handler, so the server's undefined navigator
-// picks the Ctrl branch and nothing renders from it before hydration.
-const PASTE_KEY =
-  typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.userAgent)
-    ? '⌘V'
-    : 'Ctrl+V';
+// How to tell someone to paste, which is a keyboard shortcut on a desktop and
+// a long-press on a phone. Only ever read inside a click handler, so the
+// server's undefined navigator picks a branch nothing renders from.
+const UA = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+const PASTE_HINT = /Android|iP(hone|ad|od)/.test(UA)
+  ? 'long-press the post box and paste it'
+  : `press ${/Mac/.test(UA) ? '⌘V' : 'Ctrl+V'} in the post box`;
 
 function toBlob(canvas) {
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
@@ -137,46 +138,20 @@ function Tool() {
   async function shareToX(text) {
     setError('');
     setNote('');
-
-    // x.com/intent/post carries text and a URL — never media. The only way to
-    // hand X the actual PNG is the share sheet, so use it where it exists
-    // (phones, mostly): picking X there opens the composer with the image
-    // already attached.
-    //
-    // Everything before this call is synchronous on purpose. Safari counts the
-    // click as spent the moment an await lands, and window.open spends it too,
-    // so the old order — open a tab, encode the canvas, then share — reached
-    // navigator.share with no activation left. It threw, the code fell through
-    // to the intent, and the post opened with the caption and no image.
-    const blob = png;
-    const file = blob && new File([blob], filename, { type: 'image/png' });
-    if (file && navigator.canShare?.({ files: [file] })) {
-      setBusy('Opening X…');
-      try {
-        await navigator.share({ files: [file], text });
-        setBusy('');
-        return;
-      } catch (err) {
-        setBusy('');
-        // Dismissed the sheet — that is a no, not a reason to open a window.
-        if (err?.name === 'AbortError') return;
-        // Anything else (no target app, blocked): fall through to the intent.
-      }
-    }
-
     setBusy('Opening X…');
 
-    // Desktop from here down, where canShare is false and no await has run yet,
-    // so the click still counts and this window is not blocked. `noopener` in
-    // the features string would hand back null, so the opener is cut manually.
+    // Straight to the composer: no share sheet to pick through, and no `url`
+    // param, which X would paste into the post body as a link after the
+    // hashtag. The graphic is attached by hand — nothing a web page can hand
+    // X carries media, so the choice is a visible link or a manual attach.
+    // Opened first, while the click still counts as a user gesture; `noopener`
+    // in the features string would hand back null, so the opener is cut
+    // manually.
     let tab = window.open('', '_blank');
     if (tab) tab.opener = null;
 
-    // No `url` param: X pastes it into the post body as a second link, sitting
-    // right after the hashtag next to the Details: line the caption already
-    // carries. The cost is the OG card — nobody gets an image unless they put
-    // it there, so put the PNG on the clipboard and let a paste do the work.
-    // The composer takes pasted images; a download plus a file picker is the
+    // Clipboard first so the attach is a paste where that works — the X web
+    // composer takes pasted images. Downloading and picking the file is the
     // fallback for browsers that will not write image/png.
     let pasteable = false;
     try {
@@ -184,7 +159,7 @@ function Tool() {
       // whose data was awaited first. The encoded PNG is normally already in
       // hand, so this only re-encodes if a click beat the draw effect to it.
       await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blob ?? toBlob(canvasRef.current) }),
+        new ClipboardItem({ 'image/png': png ?? toBlob(canvasRef.current) }),
       ]);
       pasteable = true;
     } catch {
@@ -192,7 +167,7 @@ function Tool() {
     }
     setNote(
       pasteable
-        ? `Image copied — press ${PASTE_KEY} in the post box to attach it.`
+        ? `Image copied — ${PASTE_HINT} to attach it.`
         : 'Use DOWNLOAD PNG and attach it to the post.',
     );
     const url = new URL('https://x.com/intent/post');
