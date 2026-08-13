@@ -76,6 +76,11 @@ function Tool() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  // Latest canvas as a PNG, kept current by the draw effect. Sharing has to
+  // reach navigator.share with nothing awaited in front of it, so the encode
+  // cannot happen inside the click — and state rather than a ref because the
+  // buttons stay disabled until there is something to hand over.
+  const [png, setPng] = useState(null);
 
   useEffect(() => {
     loadFonts();
@@ -88,12 +93,17 @@ function Tool() {
     // first paint — you see the poster before you commit a photo to it.
     if (!canvasRef.current) return;
     let stale = false;
+    setPng(null);
     loadFonts()
       .then(() => {
         if (stale) return;
         return format === 'pfp'
           ? renderPfp(canvasRef.current, img, view)
           : renderCard(canvasRef.current, img, { name, role }, view);
+      })
+      .then(() => (stale ? null : toBlob(canvasRef.current)))
+      .then((blob) => {
+        if (!stale && blob) setPng(blob);
       })
       .catch(() => setError('Could not draw that image. Try another one.'));
     return () => {
@@ -120,49 +130,47 @@ function Tool() {
 
   async function download() {
     setBusy('Exporting…');
-    saveBlob(await toBlob(canvasRef.current), filename);
+    saveBlob(png ?? (await toBlob(canvasRef.current)), filename);
     setBusy('');
   }
 
   async function shareToX(text) {
-    setBusy('Opening X…');
     setError('');
     setNote('');
-
-    // Claim the tab NOW, while the click is still the browser's idea of a user
-    // gesture. Opening it after the upload await is what mobile blocks outright
-    // — the popup never appears and nothing tells you why. `noopener` in the
-    // features string would hand back null, so the opener is cut manually.
-    let tab = window.open('', '_blank');
-    if (tab) tab.opener = null;
-
-    // Kept as a promise as well as a value: the clipboard path below has to
-    // hand ClipboardItem an unresolved promise created inside the click, which
-    // is the only shape Safari accepts once an await has gone by.
-    const blobPromise = toBlob(canvasRef.current);
-    const blob = await blobPromise;
 
     // x.com/intent/post carries text and a URL — never media. The only way to
     // hand X the actual PNG is the share sheet, so use it where it exists
     // (phones, mostly): picking X there opens the composer with the image
     // already attached.
-    const file = new File([blob], filename, { type: 'image/png' });
-    if (navigator.canShare?.({ files: [file] })) {
+    //
+    // Everything before this call is synchronous on purpose. Safari counts the
+    // click as spent the moment an await lands, and window.open spends it too,
+    // so the old order — open a tab, encode the canvas, then share — reached
+    // navigator.share with no activation left. It threw, the code fell through
+    // to the intent, and the post opened with the caption and no image.
+    const blob = png;
+    const file = blob && new File([blob], filename, { type: 'image/png' });
+    if (file && navigator.canShare?.({ files: [file] })) {
+      setBusy('Opening X…');
       try {
         await navigator.share({ files: [file], text });
-        tab?.close();
         setBusy('');
         return;
       } catch (err) {
+        setBusy('');
         // Dismissed the sheet — that is a no, not a reason to open a window.
-        if (err?.name === 'AbortError') {
-          tab?.close();
-          setBusy('');
-          return;
-        }
+        if (err?.name === 'AbortError') return;
         // Anything else (no target app, blocked): fall through to the intent.
       }
     }
+
+    setBusy('Opening X…');
+
+    // Desktop from here down, where canShare is false and no await has run yet,
+    // so the click still counts and this window is not blocked. `noopener` in
+    // the features string would hand back null, so the opener is cut manually.
+    let tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
 
     // No `url` param: X pastes it into the post body as a second link, sitting
     // right after the hashtag next to the Details: line the caption already
@@ -172,8 +180,11 @@ function Tool() {
     // fallback for browsers that will not write image/png.
     let pasteable = false;
     try {
+      // ClipboardItem takes the promise unresolved: Safari rejects a write
+      // whose data was awaited first. The encoded PNG is normally already in
+      // hand, so this only re-encodes if a click beat the draw effect to it.
       await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blobPromise }),
+        new ClipboardItem({ 'image/png': blob ?? toBlob(canvasRef.current) }),
       ]);
       pasteable = true;
     } catch {
@@ -193,9 +204,11 @@ function Tool() {
     setBusy('');
   }
 
+  // Same activation rule as shareToX: reach navigator.share with the PNG the
+  // draw effect already encoded, never with one awaited inside the click.
   async function shareNative() {
-    const blob = await toBlob(canvasRef.current);
-    const file = new File([blob], filename, { type: 'image/png' });
+    if (!png) return;
+    const file = new File([png], filename, { type: 'image/png' });
     try {
       await navigator.share({ files: [file], text: caption(format) });
     } catch {
@@ -312,14 +325,14 @@ function Tool() {
         {busy && <p className="muted">{busy}</p>}
 
         <div className="actions">
-          <button className="btn primary" disabled={!img || !!busy} onClick={download}>
+          <button className="btn primary" disabled={!img || !png || !!busy} onClick={download}>
             DOWNLOAD PNG
           </button>
-          <button className="btn x" disabled={!img || !!busy} onClick={() => shareToX(caption(format))}>
+          <button className="btn x" disabled={!img || !png || !!busy} onClick={() => shareToX(caption(format))}>
             SHARE TO X
           </button>
           {canShareFiles && (
-            <button className="btn" disabled={!img || !!busy} onClick={shareNative}>
+            <button className="btn" disabled={!img || !png || !!busy} onClick={shareNative}>
               SHARE ELSEWHERE
             </button>
           )}
