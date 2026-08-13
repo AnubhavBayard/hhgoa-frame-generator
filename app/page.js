@@ -29,15 +29,6 @@ const ZOOM_MIN = 1;
 const ZOOM_MAX = 8;
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
-// localhost and LAN addresses X can never crawl: the share link only earns its
-// place in a post when it resolves for everyone, otherwise it is dead text.
-const PRIVATE_HOST =
-  /^(localhost$|127\.|0\.0\.0\.0$|\[?::1\]?$|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|.*\.local$)/i;
-
-function linkIsPublic() {
-  return typeof location !== 'undefined' && !PRIVATE_HOST.test(location.hostname);
-}
-
 function toBlob(canvas) {
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
@@ -127,7 +118,7 @@ function Tool() {
   }
 
   async function shareToX(text) {
-    setBusy('Uploading…');
+    setBusy('Opening X…');
     setError('');
     setNote('');
 
@@ -162,28 +153,12 @@ function Tool() {
       }
     }
 
-    // The link exists to carry the OG image card. On a local or LAN origin it
-    // carries nothing — X cannot fetch it — so skip the upload entirely rather
-    // than paste an unreachable URL into someone's post.
-    let link = '';
-    const publicOrigin = linkIsPublic();
-    if (publicOrigin) {
-      try {
-        const body = new FormData();
-        body.append('image', blob, filename);
-        const res = await fetch('/api/share', { method: 'POST', body });
-        if (res.ok) link = `${location.origin}/f/${(await res.json()).id}`;
-      } catch {
-        /* fall through to the attach-it-yourself flow */
-      }
-    }
-    // Nothing to link: still open the post, but never save a file the user did
-    // not ask for — DOWNLOAD PNG is that button. Why there is no link is our
-    // problem, not theirs; the note only says what to do about it.
-    if (!link) setNote('Use DOWNLOAD PNG and attach it to the post.');
+    // No `url` param: X pastes it into the post body as a second link, sitting
+    // right after the hashtag next to the Details: line the caption already
+    // carries. The cost is the OG card, so the note asks for the PNG instead.
+    setNote('Use DOWNLOAD PNG and attach it to the post.');
     const url = new URL('https://x.com/intent/post');
     url.searchParams.set('text', text);
-    if (link) url.searchParams.set('url', link);
     // The blank tab is already open; navigating it is never blocked. If the
     // browser refused it up front, take this tab instead of losing the post.
     if (tab) tab.location.href = url.toString();

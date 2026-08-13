@@ -5,6 +5,8 @@
   --pink: #e30670;
   --leaf: #99c953;
   --cream: #fff7e0;
+  --ink: #12100a;
+  --shadow-brut: 4px 4px 0 var(--ink);
   --ui: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   --display: 'Playfair Display', Georgia, serif;
 }
@@ -120,20 +122,32 @@ h1 {
   padding: 6px;
 }
 
+/* same outline+shadow language as .btn, one size down. Unpressed sits already
+   pushed in, so selecting a tab is the tab standing up out of the strip. */
 .tabs button {
   font: inherit;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.06em;
+  text-transform: uppercase;
   padding: 11px 8px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--cream);
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  background: var(--cream);
+  color: var(--ink);
   cursor: pointer;
+  transform: translate(3px, 3px);
+  box-shadow: none;
+  transition: transform 0.06s ease-out, box-shadow 0.06s ease-out;
 }
 
-.tabs button[aria-pressed='true'] { background: var(--yellow); color: var(--green-deep); }
+.tabs button[aria-pressed='true'] {
+  background: var(--yellow);
+  transform: none;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.tabs button:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
 
 /* dropzone */
 .drop {
@@ -192,26 +206,50 @@ input[type='text']:focus { outline: none; border-color: var(--yellow); }
 
 .actions { display: grid; gap: 10px; margin-top: 18px; }
 
+/* neo-brutalist: hard black outline, solid offset shadow, no blur. The press
+   moves the button onto its own shadow, so the travel is the whole feedback. */
 .btn {
   display: block;
   width: 100%;
   font: inherit;
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   text-align: center;
   text-decoration: none;
   padding: 15px 16px;
-  border: 2px solid var(--yellow);
-  border-radius: 13px;
-  background: transparent;
-  color: var(--yellow);
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  background: var(--cream);
+  color: var(--ink);
   cursor: pointer;
+  box-shadow: var(--shadow-brut);
+  transition: transform 0.06s ease-out, box-shadow 0.06s ease-out;
 }
 
-.btn.primary { background: var(--yellow); color: var(--green-deep); }
-.btn.x { background: var(--pink); border-color: var(--pink); color: var(--cream); }
-.btn:disabled { opacity: 0.45; cursor: default; }
+.btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.btn:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.btn:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
+
+.btn.primary { background: var(--yellow); color: var(--ink); }
+.btn.x { background: var(--pink); color: var(--cream); }
+
+/* disabled keeps the outline but drops the shadow — nothing left to press */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+  transform: translate(4px, 4px);
+}
 
 .muted { font-size: 13px; color: var(--leaf); text-align: center; margin: 14px 0 0; }
 .err { color: var(--pink); font-weight: 700; }
@@ -408,13 +446,26 @@ footer { margin-top: 34px; text-align: center; font-size: 11px; letter-spacing: 
   font-size: clamp(12px, 1.4vw, 18px);
   letter-spacing: 0.16em;
   padding: 11px clamp(14px, 2vw, 30px);
-  border: 0;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
   background: var(--yellow);
-  color: #8a1a10;
+  color: var(--ink);
   cursor: pointer;
+  box-shadow: var(--shadow-brut);
+  transition: transform 0.06s ease-out, box-shadow 0.06s ease-out;
 }
 
-.ticket button:hover { background: var(--cream); }
+.ticket button:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.ticket button:active {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.ticket button:focus-visible { outline: 3px solid var(--cream); outline-offset: 3px; }
 
 /* auto margins here and on .meta center the wordmark+meta pair as one block,
    so the meta line sits right under HACKER HOUSE instead of at the page foot */
