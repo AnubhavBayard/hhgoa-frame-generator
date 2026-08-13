@@ -29,6 +29,13 @@ const ZOOM_MIN = 1;
 const ZOOM_MAX = 8;
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
+// Only ever read inside a click handler, so the server's undefined navigator
+// picks the Ctrl branch and nothing renders from it before hydration.
+const PASTE_KEY =
+  typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.userAgent)
+    ? '⌘V'
+    : 'Ctrl+V';
+
 function toBlob(canvas) {
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
@@ -129,7 +136,11 @@ function Tool() {
     let tab = window.open('', '_blank');
     if (tab) tab.opener = null;
 
-    const blob = await toBlob(canvasRef.current);
+    // Kept as a promise as well as a value: the clipboard path below has to
+    // hand ClipboardItem an unresolved promise created inside the click, which
+    // is the only shape Safari accepts once an await has gone by.
+    const blobPromise = toBlob(canvasRef.current);
+    const blob = await blobPromise;
 
     // x.com/intent/post carries text and a URL — never media. The only way to
     // hand X the actual PNG is the share sheet, so use it where it exists
@@ -155,8 +166,24 @@ function Tool() {
 
     // No `url` param: X pastes it into the post body as a second link, sitting
     // right after the hashtag next to the Details: line the caption already
-    // carries. The cost is the OG card, so the note asks for the PNG instead.
-    setNote('Use DOWNLOAD PNG and attach it to the post.');
+    // carries. The cost is the OG card — nobody gets an image unless they put
+    // it there, so put the PNG on the clipboard and let a paste do the work.
+    // The composer takes pasted images; a download plus a file picker is the
+    // fallback for browsers that will not write image/png.
+    let pasteable = false;
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blobPromise }),
+      ]);
+      pasteable = true;
+    } catch {
+      /* no permission, no ClipboardItem, or no image/png support */
+    }
+    setNote(
+      pasteable
+        ? `Image copied — press ${PASTE_KEY} in the post box to attach it.`
+        : 'Use DOWNLOAD PNG and attach it to the post.',
+    );
     const url = new URL('https://x.com/intent/post');
     url.searchParams.set('text', text);
     // The blank tab is already open; navigating it is never blocked. If the
