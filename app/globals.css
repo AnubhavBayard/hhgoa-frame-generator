@@ -20,12 +20,24 @@ body {
   color: var(--cream);
   font-family: var(--ui);
   -webkit-text-size-adjust: 100%;
-  /* one image filling the viewport — tiling showed its seams */
-  background-image: url('/background.png');
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
+}
+
+/* One image filling the viewport — tiling showed its seams. It rides on its own
+   fixed layer instead of `background-attachment: fixed`, which mobile Safari
+   ignores: there the image scrolls with the page. Height is locked to the tall
+   viewport (100lvh) so the image keeps its size when the URL bar collapses —
+   sizing to the shrinking visual viewport is what makes it drift on scroll. */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  z-index: -1;
+  background: var(--green) url('/background.png') center / cover no-repeat;
+  pointer-events: none;
 }
 
 /* the tool page scrolls, so its coconuts are fixed: absolute ones would fall
